@@ -16,12 +16,12 @@ st.title("Sales Analytics Dashboard")
 
 cols = df.columns.tolist()
 
-date_col = st.selectbox("Select Date Column", cols)
-country_col = st.selectbox("Select Country Column", cols)
-quantity_col = st.selectbox("Select Quantity Column", cols)
-price_col = st.selectbox("Select Unit Price Column", cols)
-customer_col = st.selectbox("Select Customer ID Column", cols)
-invoice_col = st.selectbox("Select Invoice No Column", cols)
+date_col = st.selectbox("Date column", cols)
+country_col = st.selectbox("Country column", cols)
+quantity_col = st.selectbox("Quantity column", cols)
+price_col = st.selectbox("Unit price column", cols)
+customer_col = st.selectbox("Customer ID column", cols)
+invoice_col = st.selectbox("Invoice number column", cols)
 
 df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 df[quantity_col] = pd.to_numeric(df[quantity_col], errors="coerce")
@@ -30,7 +30,14 @@ df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
 df = df.dropna(subset=[date_col, quantity_col, price_col])
 df["sales"] = df[quantity_col] * df[price_col]
 
-st.sidebar.header("Filters")
+years_available = df[date_col].dt.year.dropna().unique()
+
+if len(years_available) < 2:
+    st.error("Not enough year values to create a range slider")
+    st.stop()
+
+min_year = int(years_available.min())
+max_year = int(years_available.max())
 
 countries = st.sidebar.multiselect(
     "Countries",
@@ -38,28 +45,22 @@ countries = st.sidebar.multiselect(
     default=sorted(df[country_col].unique())[:5]
 )
 
-years = st.sidebar.slider(
+year_range = st.sidebar.slider(
     "Year Range",
-    int(df[date_col].dt.year.min()),
-    int(df[date_col].dt.year.max()),
-    (
-        int(df[date_col].dt.year.min()),
-        int(df[date_col].dt.year.max())
-    )
+    min_year,
+    max_year,
+    (min_year, max_year)
 )
 
 filtered_df = df[
     (df[country_col].isin(countries)) &
-    (df[date_col].dt.year.between(years[0], years[1]))
+    (df[date_col].dt.year.between(year_range[0], year_range[1]))
 ]
 
 total_sales = filtered_df["sales"].sum()
 total_customers = filtered_df[customer_col].nunique()
 total_orders = filtered_df[invoice_col].nunique()
-avg_order_value = (
-    filtered_df.groupby(invoice_col)["sales"].sum().mean()
-    if total_orders > 0 else 0
-)
+avg_order_value = filtered_df.groupby(invoice_col)["sales"].sum().mean()
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Sales", f"{total_sales:,.2f}")
@@ -67,22 +68,16 @@ c2.metric("Customers", total_customers)
 c3.metric("Orders", total_orders)
 c4.metric("Avg Order Value", f"{avg_order_value:,.2f}")
 
-sales_trend = (
+trend = (
     filtered_df.groupby(filtered_df[date_col].dt.year)["sales"]
     .sum()
     .reset_index(name="total_sales")
 )
 
-fig1 = px.line(
-    sales_trend,
-    x=date_col,
-    y="total_sales",
-    markers=True,
-    title="Sales Trend"
-)
+fig1 = px.line(trend, x=date_col, y="total_sales", markers=True)
 st.plotly_chart(fig1, use_container_width=True)
 
-country_sales = (
+top_countries = (
     filtered_df.groupby(country_col)["sales"]
     .sum()
     .reset_index()
@@ -90,14 +85,7 @@ country_sales = (
     .head(10)
 )
 
-fig2 = px.bar(
-    country_sales,
-    x="sales",
-    y=country_col,
-    orientation="h",
-    title="Top Countries by Sales"
-)
+fig2 = px.bar(top_countries, x="sales", y=country_col, orientation="h")
 st.plotly_chart(fig2, use_container_width=True)
 
-st.subheader("Data Preview")
 st.dataframe(filtered_df.head(100))
