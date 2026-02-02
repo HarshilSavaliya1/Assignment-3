@@ -28,21 +28,26 @@ df[quantity_col] = pd.to_numeric(df[quantity_col], errors="coerce")
 df[price_col] = pd.to_numeric(df[price_col], errors="coerce")
 
 df = df.dropna(subset=[date_col, quantity_col, price_col])
-df["sales"] = df[quantity_col] * df[price_col]
 
-years_available = df[date_col].dt.year.dropna().unique()
-
-if len(years_available) < 2:
-    st.error("Not enough year values to create a range slider")
+if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+    st.error("Selected date column is not datetime-compatible")
     st.stop()
 
-min_year = int(years_available.min())
-max_year = int(years_available.max())
+df["sales"] = df[quantity_col] * df[price_col]
+
+years = df[date_col].dt.year.dropna().unique()
+
+if len(years) < 2:
+    st.error("Not enough valid year values")
+    st.stop()
+
+min_year = int(years.min())
+max_year = int(years.max())
 
 countries = st.sidebar.multiselect(
     "Countries",
-    sorted(df[country_col].unique()),
-    default=sorted(df[country_col].unique())[:5]
+    sorted(df[country_col].dropna().unique()),
+    default=sorted(df[country_col].dropna().unique())[:5]
 )
 
 year_range = st.sidebar.slider(
